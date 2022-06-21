@@ -1,0 +1,6 @@
+*.py[cod]
+/env
+*.pkl
+.ipynb_checkpoints
+*.xlsx
+*.log

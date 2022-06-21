@@ -1,0 +1,82 @@
+{
+    "mappings": {
+        "properties": {
+            "token": {
+                "type": "keyword",
+                "ignore_above": 256
+            },
+            "parent": {
+                "type": "keyword",
+                "ignore_above": 256
+            },
+            "answer": {
+                "type": "text",
+                "analyzer": "han_bigrams",
+                "fields": {
+                    "keyword": {
+                        "type": "keyword",
+                        "ignore_above": 256
+                    }
+                }
+            },
+            "url": {
+                "type": "text",
+                "fields": {
+                    "keyword": {
+                        "type": "keyword",
+                        "ignore_above": 256
+                    }
+                }
+            },
+            "question": {
+                "type": "text",
+                "analyzer": "han_bigrams",
+                "fields": {
+                    "keyword": {
+                        "type": "keyword",
+                        "ignore_above": 256
+                    }
+                }
+            },
+            "question_vec": {
+                "type": "knn_vector",
+                "dimension": 768,
+                "method": {
+                    "engine": "nmslib",
+                    "space_type": "cosinesimil",
+                    "name": "hnsw",
+                    "parameters": {
+                        "ef_construction": 128,
+                        "m": 24
+                    }
+                }
+            }
+        }
+    },
+    "settings": {
+        "index": {
+            "knn": true
+        },
+        "analysis": {
+            "analyzer": {
+                "han_bigrams": {
+                    "tokenizer": "standard",
+                    "filter": [
+                        "han_bigrams_filter"
+                    ]
+                }
+            },
+            "filter": {
+                "han_bigrams_filter": {
+                    "type": "cjk_bigram",
+                    "ignored_scripts": [
+                        "hangul",
+                        "hiragana",
+                        "katakana"
+                    ],
+                    "output_unigrams": true
+                }
+            }
+        }
+    }
+}
