@@ -12,15 +12,18 @@ from .app import app
 from .items import Item_jzmh
 from .open_search import client, index_name
 from .encode import encode
+from .exact_sim import exact_sim
 
 
-def get_answer(question):
+def get_answer(question, token, size=5):
     hits = client.search(index=index_name, body={
         "_source": [
             "question",
             "answer",
             "parent",
             "url",
+            "created_at",
+            "updated_at"
         ],
         "query": {
             "bool": {
@@ -42,12 +45,15 @@ def get_answer(question):
                     }
                 ]
             }
-        }
+        },
+        "size": size
     })
     rets = []
     for obj in hits['hits']['hits']:
-        obj['_source']['id'] = obj['_id']
-        obj['_source']['score'] = obj['_score']
+        s = obj['_source']
+        s['id'] = obj['_id']
+        s['score'] = obj['_score']
+        s['exact_score'] = exact_sim(question, s['question'])
         rets.append(obj['_source'])
     return rets
 
@@ -62,7 +68,7 @@ async def api_qabot_ask(token: str, request: Request):
     """
     body = await request.json()
     question = body.get('question')
-    rets = get_answer(question)
+    rets = get_answer(question, token)
     
     return {
         'ok': True,
@@ -83,6 +89,8 @@ async def api_qabot_post(token: str='', page: int=0, page_size: int=10):
             "answer",
             "parent",
             "url",
+            "created_at",
+            "updated_at"
         ],
         "query": {
             "term": {
@@ -90,8 +98,13 @@ async def api_qabot_post(token: str='', page: int=0, page_size: int=10):
             }
         },
         "from": page * page_size,
-        "size": page_size
+        "size": page_size,
+        "track_total_hits": True,
+        "sort" : [
+            { "updated_at" : "desc" }
+        ]
     })
+    total = hits['hits']['total']['value']
     rets = []
     for obj in hits['hits']['hits']:
         obj['_source']['id'] = obj['_id']
@@ -99,6 +112,7 @@ async def api_qabot_post(token: str='', page: int=0, page_size: int=10):
     return {
         'ok': True,
         'data': rets,
+        'total': total,
     }
 
 
@@ -131,6 +145,7 @@ async def api_qabot_post(token: str, request: Request):
             'error': 'Invalid answer'
         }
     _id = str(uuid4())
+    now = str(datetime.now()).replace(' ', 'T')[:19]
     ret = client.index(index=index_name, id=_id, body={
         'token': token,
         'question': question,
@@ -138,15 +153,24 @@ async def api_qabot_post(token: str, request: Request):
         'parent': parent,
         'url': url,
         'question_vec': encode(question),
-    })
-    print(ret)
-    return {
-        'ok': True,
-    }
+        'created_at': now,
+        'updated_at': now,
+    }, refresh='wait_for')
+    client.indices.refresh(index_name)
+    print('create', ret)
+    if ret.get('result') == 'created':
+        return {
+            'ok': True,
+        }
+    else:
+        return {
+            'ok': False,
+            'error': '未知错误'
+        }
     
 
-@app.put('/api/qabot/pair/{token}')
-async def api_qabot_put(token: str, request: Request):
+@app.put('/api/qabot/pair/{token}/{_id}')
+async def api_qabot_put(token: str, _id: str, request: Request):
     """修改
     
     curl -XPUT localhost:8000/api/qabot/pair/test_token \
@@ -159,7 +183,6 @@ async def api_qabot_put(token: str, request: Request):
             'error': 'Invalid token'
         }
     body = await request.json()
-    _id = body.get('id')
     question = body.get('question')
     answer = body.get('answer')
     parent = body.get('parent')
@@ -179,14 +202,18 @@ async def api_qabot_put(token: str, request: Request):
             'ok': False,
             'error': 'Invalid answer'
         }
-    ret = client.index(index=index_name, id=_id, body={
-        'token': token,
-        'question': question,
-        'answer': answer,
-        'parent': parent,
-        'url': url,
-        'question_vec': encode(question),
-    })
+    now = str(datetime.now()).replace(' ', 'T')[:19]
+    ret = client.update(index=index_name, id=_id, body={
+        'doc': {
+            'question': question,
+            'answer': answer,
+            'parent': parent,
+            'url': url,
+            'question_vec': encode(question),
+            'updated_at': now,
+        }
+    }, refresh='wait_for')
+    client.indices.refresh(index_name)
     print(ret)
     return {
         'ok': True,
@@ -202,7 +229,7 @@ async def api_qabot_delete(token: str='', _id: str=''):
     ret = client.delete(index=index_name, id=_id)
     print(ret)
     # 删除子问题
-    ret = client.delete_by_query(index=index_name, body={
+    client.delete_by_query(index=index_name, body={
         "query": {
             "bool": {
                 "filter": [
@@ -220,10 +247,18 @@ async def api_qabot_delete(token: str='', _id: str=''):
             }
         }
     })
-    print(ret)
-    return {
-        'ok': True,
-    }
+    client.indices.refresh(index_name)
+    # client.cluster.health(wait_for_no_relocating_shards=True, wait_for_active_shards='all')
+    print('delete', ret)
+    if ret.get('result') == 'deleted':
+        return {
+            'ok': True,
+        }
+    else:
+        return {
+            'ok': False,
+            'error': '未知错误',
+        }
 
 @app.post("/api/qabot/message")
 async def receive_message(item: Item_jzmh, request: Request):
@@ -235,7 +270,16 @@ async def receive_message(item: Item_jzmh, request: Request):
     """
     print('receive message', datetime.now())
     token = item.data.token
-    ...
+    question = item.data.payload.text
+    rets = get_answer(question, token)
+    if rets[0]['exact_score'] > 0.5:
+        text = ''
+    else:
+        text = ''
+    ret = send_message(chatid=item.data.chatId, text=text, token=token, mention=mention)
+    print('response message', datetime.now())
+    return ret
+
 
 @app.get('/')
 async def hello_world():
