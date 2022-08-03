@@ -13,6 +13,7 @@ from .items import Item_jzmh
 from .open_search import client, index_name
 from .encode import encode
 from .exact_sim import exact_sim
+from .jzmh import send_message
 
 
 def get_answer(question, token, size=5):
@@ -58,6 +59,23 @@ def get_answer(question, token, size=5):
     return rets
 
 
+def make_answer(rets):
+    if len(rets) <= 0:
+        return ''
+    if rets[0]['exact_score'] > 0.5:
+        a = rets[0]
+        text = f'''{a["question"]}
+{a["answer"]}'''
+    else:
+        text = f'''没有找到匹配的回答，你问的是下面几个问题吗？
+{rets[0]["question"]}'''
+        if len(rets) > 1:
+            text += f'\n{rets[1]["question"]}'
+        if len(rets) > 2:
+            text += f'\n{rets[2]["question"]}'
+    return text
+
+
 @app.post('/api/qabot/ask/{token}')
 async def api_qabot_ask(token: str, request: Request):
     """提问
@@ -73,6 +91,7 @@ async def api_qabot_ask(token: str, request: Request):
     return {
         'ok': True,
         'data': rets,
+        'text': make_answer(rets)
     }
 
 
@@ -144,7 +163,31 @@ async def api_qabot_post(token: str, request: Request):
             'ok': False,
             'error': 'Invalid answer'
         }
+    
+    hits = client.search(index=index_name, body={
+        '_source': ['question'],
+        'query': {
+            'bool': {
+                'filter': {
+                    'term': {
+                        'token': token
+                    }
+                },
+                'must': {
+                    'term': {
+                        'question.keyword': question
+                    }
+                }
+            }
+        }
+    })
+
     _id = str(uuid4())
+    exists = False
+    if hits['hits']['total']['value'] > 0:
+        _id = hits['hits']['hits'][0]['_id']
+        exists = True
+
     now = str(datetime.now()).replace(' ', 'T')[:19]
     ret = client.index(index=index_name, id=_id, body={
         'token': token,
@@ -161,11 +204,13 @@ async def api_qabot_post(token: str, request: Request):
     if ret.get('result') == 'created':
         return {
             'ok': True,
+            'exists': exists,
         }
     else:
         return {
             'ok': False,
-            'error': '未知错误'
+            'error': '未知错误',
+            'exists': exists,
         }
     
 
@@ -268,14 +313,18 @@ async def receive_message(item: Item_jzmh, request: Request):
             "data": { "payload": { "text": "hello" }, "chatId": "fake" }
         }'
     """
-    print('receive message', datetime.now())
+    print('receive message', datetime.now(), f'"{item.data.payload.text}"')
     token = item.data.token
     question = item.data.payload.text
+    # 去除群聊的at信息
+    if question.startswith('@'):
+        question = re.sub(r'^@[^\s]+\s', '', question)
     rets = get_answer(question, token)
-    if rets[0]['exact_score'] > 0.5:
-        text = ''
-    else:
-        text = ''
+    text = make_answer(rets)
+    mention = []
+    is_group = not not item.data.roomId
+    if is_group:
+        mention = [item.data.contactId]
     ret = send_message(chatid=item.data.chatId, text=text, token=token, mention=mention)
     print('response message', datetime.now())
     return ret

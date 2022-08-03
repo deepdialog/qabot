@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+pandas
+opensearch-py
+requests
+tqdm
+chardet
+arrow

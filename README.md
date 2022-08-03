@@ -1,5 +1,11 @@
 # QA Bot
 
+## Deploy
+
+```bash
+./scripts/update.sh
+```
+
 ## 开发
 
 ```

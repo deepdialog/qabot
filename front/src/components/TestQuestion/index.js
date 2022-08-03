@@ -7,6 +7,7 @@ export function TestQuestion(props) {
     const [loading, setLoading] = useState(false)
     const [question, setQuestion] = useState('')
     const [answer, setAnswer] = useState([])
+    const [text, setText] = useState('')
 
     const columns = [
         {
@@ -61,6 +62,8 @@ export function TestQuestion(props) {
                 <Button
                     onClick={async () => {
                         setLoading(true)
+                        setAnswer([])
+                        setText('')
                         const api = `/api/qabot/ask/${props.token}`
                         const res = await fetch(api, {
                             method: 'POST',
@@ -77,6 +80,7 @@ export function TestQuestion(props) {
                             item.key = item.id
                             return item
                         }))
+                        setText(ret.text)
                         setLoading(false)
                     }}
                 >
@@ -84,6 +88,9 @@ export function TestQuestion(props) {
                 </Button>
             </div>
             <div>
+                <div>
+                    {text ? <textarea value={text} style={{width: '100%'}} rows={5} /> : null}
+                </div>
                 <Table columns={columns} pagination={false} dataSource={answer} />
             </div>
         </div>

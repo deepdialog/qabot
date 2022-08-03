@@ -38,28 +38,28 @@ export function AddPair(props) {
                 {...formItemLayout}
                 layout='horizontal'
             >
-                <Form.Item label="问题" name="layout">
+                <Form.Item label="问题">
                     <Input
                         value={question}
                         onChange={e => setQuestion(e.target.value)}
                         placeholder='问题'
                     />
                 </Form.Item>
-                <Form.Item label="回答" name="layout">
+                <Form.Item label="回答">
                     <Input.TextArea
                         value={answer}
                         onChange={e => setAnswer(e.target.value)}
                         placeholder='回答'
                     />
                 </Form.Item>
-                <Form.Item label="URL" name="layout">
+                <Form.Item label="URL">
                     <Input
                         value={url}
                         onChange={e => setUrl(e.target.value)}
                         placeholder='URL（可选）'
                     />
                 </Form.Item>
-                <Form.Item name="layout" {...buttonItemLayout}>
+                <Form.Item {...buttonItemLayout}>
                     <Button
                         onClick={async () => {
                             let api
