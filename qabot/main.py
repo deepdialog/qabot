@@ -62,17 +62,18 @@ def get_answer(question, token, size=5):
 def make_answer(rets):
     if len(rets) <= 0:
         return ''
-    if rets[0]['exact_score'] > 0.5:
+    if rets[0]['score'] > 0.8 or rets[0]['exact_score'] > 0.5:
         a = rets[0]
         text = f'''{a["question"]}
 {a["answer"]}'''
     else:
-        text = f'''没有找到匹配的回答，你问的是下面几个问题吗？
-{rets[0]["question"]}'''
+        text = f'''没有找到精确匹配的回答，你问的是下面几个问题吗？
+
+{rets[0]["question"].trim()}'''
         if len(rets) > 1:
-            text += f'\n{rets[1]["question"]}'
+            text += f'\n{rets[1]["question"].trim()}'
         if len(rets) > 2:
-            text += f'\n{rets[2]["question"]}'
+            text += f'\n{rets[2]["question"].trim()}'
     return text
 
 
