@@ -55,7 +55,9 @@ def get_answer(question, token, size=5):
         s['id'] = obj['_id']
         s['score'] = obj['_score']
         s['exact_score'] = exact_sim(question, s['question'])
+        s['score'] = (s['score'] + s['exact_score']) / 2
         rets.append(obj['_source'])
+    rets = sorted(rets, key=lambda x: x['score'], reverse=True)
     return rets
 
 
