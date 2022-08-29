@@ -69,11 +69,11 @@ def make_answer(rets):
     else:
         text = f'''没有找到精确匹配的回答，你问的是下面几个问题吗？
 
-{rets[0]["question"].trim()}'''
+{rets[0]["question"].strip()}'''
         if len(rets) > 1:
-            text += f'\n{rets[1]["question"].trim()}'
+            text += f'\n{rets[1]["question"].strip()}'
         if len(rets) > 2:
-            text += f'\n{rets[2]["question"].trim()}'
+            text += f'\n{rets[2]["question"].strip()}'
     return text
 
 
